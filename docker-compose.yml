@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  # custom image
+  app:
+    build:
+      args:
+        user: ${APP_USER}
+        uid: 1000
+      context: ./docker/php/8.1.17
+      dockerfile: Dockerfile
+    image: adm-app/laravel-php8:v1.0.0
+    working_dir: /var/www/html
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./:/var/www/html
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "composer", "install"]
+      retries: 1
+      timeout: 15s
+    depends_on:
+      - mysql
+      - node
+    networks:
+      - adm-app-network
+
+  # npm
+  node:
+    image: node:18-alpine
+    working_dir: /var/www/
+    volumes:
+      - ./:/var/www/
+    expose:
+      - 4000
+    ports:
+      - 4000:4000
+    entrypoint: /bin/sh -c "npm install && npm run dev"
+    networks:
+      - adm-app-network
+
+  # nginx
+  nginx:
+    image: nginx:alpine
+    restart: always
+    working_dir: /var/www/html
+    ports:
+      - 80:80
+    volumes:
+      - ./:/var/www/html
+      - ./docker/nginx/:/etc/nginx/conf.d/
+    depends_on:
+      - app
+    networks:
+      - adm-app-network
+
+  # mysql service
+  mysql:
+    image: mysql:5.7.22
+    restart: always
+    ports:
+      - 3306:3306
+    volumes:
+      - ./.docker/mysql:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    networks:
+      - adm-app-network
+
+# networks
+networks:
+  adm-app-network:
+    driver: bridge
